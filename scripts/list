@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+
+set -e
+
+roots=("experience" "education" "projects")
+
+for root in "${roots[@]}"; do
+    found=()
+    if [[ -d "$root" ]]; then
+        while IFS= read -r -d '' file; do
+            dir=$(dirname "$file")
+            rel=${dir#$root/}
+            if [[ "$rel" == "$dir" ]]; then
+                rel=$(basename "$dir")
+            fi
+            found+=("$rel")
+        done < <(find "$root" -type f -name 'overview.md' -print0)
+    fi
+    echo "$root:"
+    if [[ ${#found[@]} -gt 0 ]]; then
+        for name in $(printf '%s\n' "${found[@]}" | sort -u); do
+            echo "- $name"
+        done
+    else
+        echo "(none)"
+    fi
+    echo
+done

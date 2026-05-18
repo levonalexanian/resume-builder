@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cleanup() {
+  # Best-effort cleanup. We compile in a temp dir so we mostly
+  # just need to remove the temp folder.
+  if [ -n "${TMPDIR_PATH:-}" ] && [ -d "${TMPDIR_PATH:-}" ]; then
+    rm -rf "$TMPDIR_PATH" || true
+  fi
+}
+
+trap cleanup EXIT
+
+if [ $# -lt 1 ]; then
+  echo "Usage: $0 <input.tex> [output.pdf]"
+  exit 1
+fi
+
+INPUT="$1"
+OUTPUT="${2:-${INPUT%.tex}.pdf}"
+DIR=$(dirname "$INPUT")
+BASE=$(basename "$INPUT")
+
+TMPDIR_PATH=$(mktemp -d)
+cp "$INPUT" "$TMPDIR_PATH/$BASE"
+
+SRC_PDF="${TMPDIR_PATH}/${BASE%.tex}.pdf"
+
+if command -v latexmk >/dev/null 2>&1; then
+  pushd "$TMPDIR_PATH" >/dev/null
+  latexmk -pdf -interaction=nonstopmode -synctex=1 "$BASE"
+  popd >/dev/null
+  if [ -f "$SRC_PDF" ]; then
+    SRC_ABS=$(realpath "$SRC_PDF")
+    OUT_ABS=$(realpath -m "$OUTPUT")
+    if [ "$SRC_ABS" != "$OUT_ABS" ]; then
+      mkdir -p "$(dirname "$OUT_ABS")"
+      mv "$SRC_PDF" "$OUT_ABS"
+    fi
+  fi
+elif command -v pdflatex >/dev/null 2>&1; then
+  pushd "$TMPDIR_PATH" >/dev/null
+  pdflatex -interaction=nonstopmode -halt-on-error "$BASE"
+  popd >/dev/null
+  if [ -f "$SRC_PDF" ]; then
+    SRC_ABS=$(realpath "$SRC_PDF")
+    OUT_ABS=$(realpath -m "$OUTPUT")
+    if [ "$SRC_ABS" != "$OUT_ABS" ]; then
+      mkdir -p "$(dirname "$OUT_ABS")"
+      mv "$SRC_PDF" "$OUT_ABS"
+    fi
+  fi
+else
+  echo "Error: latexmk or pdflatex not found in PATH." >&2
+  exit 2
+fi
+
+echo "Generated $OUTPUT"
