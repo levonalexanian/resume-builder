@@ -1,0 +1,12 @@
+services:
+  dev:
+    build:
+      context: .
+      dockerfile: .devcontainer/Dockerfile
+    image: resume-builder-dev:local
+    working_dir: /home/vscode/workspace
+    volumes:
+      - .:/home/vscode/workspace
+    environment:
+      - RESUME_REPO_ROOT=/home/vscode/workspace
+    init: true

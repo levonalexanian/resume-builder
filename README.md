@@ -26,8 +26,39 @@ build, and run the pipeline locally is provided inside the container:
 - Resume orchestrator dependencies (installed automatically via
   `postCreateCommand`)
 
-Open the repo in "Reopen in Container" / "Rebuild Container" after pulling
-changes that touch `.devcontainer/`.
+You can drive the container two ways:
+
+### From VS Code
+
+Open the repo and pick "Reopen in Container" / "Rebuild Container" after
+pulling changes that touch `.devcontainer/`. The `postCreateCommand` runs
+`npm install && npm run build` for you.
+
+### From a host terminal (no VS Code)
+
+A `docker-compose.yml` + `Makefile` wrap the same Dockerfile so every
+toolchain command runs inside the container. The only host requirements are
+Docker Engine and Docker Compose v2.
+
+```bash
+make image-build   # build the dev image (one-time / after Dockerfile changes)
+make install       # npm install in tools/orchestrator
+make build         # bundle the orchestrator
+make typecheck     # tsc --noEmit
+make test          # vitest run
+make sh            # interactive shell in the container
+```
+
+Run the pipeline:
+
+```bash
+make run ARGS='run --job path/to/job.md'
+make pdf TEX=resumes/<run>/resume.tex
+```
+
+`make help` lists every target. The compose file bind-mounts the repo into
+`/home/vscode/workspace` so edits are reflected immediately and outputs land
+on the host.
 
 ## One-time setup
 
