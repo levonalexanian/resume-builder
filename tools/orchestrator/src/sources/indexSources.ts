@@ -43,7 +43,8 @@ export async function indexSources(opts: IndexSourcesOpts): Promise<SourcesIndex
     cwd: rootAbs,
     dot: false,
     onlyFiles: true,
-    unique: true
+    unique: true,
+    ignore: ["**/*.example.md"]
   });
 
   const docs: SourceDoc[] = [];
