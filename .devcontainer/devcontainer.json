@@ -1,0 +1,14 @@
+{
+  "name": "Resume LaTeX Devcontainer",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "settings": {},
+  "extensions": [
+    "James-Yu.latex-workshop",
+    "yzhang.markdown-all-in-one",
+    "GitHub.copilot"
+  ],
+  "postCreateCommand": "cd tools/orchestrator && npm install && npm run build",
+  "remoteUser": "vscode"
+}

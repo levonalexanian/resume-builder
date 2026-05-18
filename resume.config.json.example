@@ -1,0 +1,10 @@
+{
+  "name": "Your Name",
+  "phone": "(555) 555-5555",
+  "email": "you@example.com",
+  "linkedinUrl": "https://www.linkedin.com/in/your-handle/",
+  "linkedinDisplay": "linkedin.com/in/your-handle",
+  "githubUrl": "https://github.com/your-handle",
+  "githubDisplay": "github.com/your-handle",
+  "skillsLatex": "\\textit{[Technical Skills section placeholder]}"
+}
