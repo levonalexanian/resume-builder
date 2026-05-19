@@ -7,9 +7,11 @@
     "resume-orchestrator": "dist/cli.js"
   },
   "scripts": {
-    "build": "tsup src/cli.ts src/graph/serve.ts --format esm --sourcemap --clean",
+    "build": "tsup src/cli.ts src/graph/serve.ts src/web/server.ts --format esm --sourcemap --clean",
     "dev": "tsx src/cli.ts",
     "graphql:serve": "tsx src/graph/serve.ts",
+    "web:serve": "tsx src/web/server.ts",
+    "web:serve:prod": "node dist/web/server.js",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

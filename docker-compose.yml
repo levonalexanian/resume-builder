@@ -9,4 +9,6 @@ services:
       - .:/home/vscode/workspace
     environment:
       - RESUME_REPO_ROOT=/home/vscode/workspace
+    ports:
+      - "3001:3001"
     init: true

@@ -7,8 +7,10 @@
 !.env.example
 resume.config.json
 resumes/
-tools/orchestrator/node_modules
-tools/orchestrator/dist
+backend/node_modules
+backend/dist
+frontend/node_modules
+frontend/dist
 node_modules
 *.pdf
 *.aux

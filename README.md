@@ -12,7 +12,8 @@ LLM steps).
   - `search.prompt.md` — Step 1 prompt (job analysis)
   - `generate.prompt.md` — Step 4 prompt (resume drafting)
 - `scripts/latex_to_pdf` — `.tex` → `.pdf` build helper
-- `tools/orchestrator/` — TypeScript CLI and GraphQL layer
+- `backend/` — TypeScript CLI, GraphQL layer, and HTTP API
+- `frontend/` — React + Tailwind web UI (served by the backend in production)
 - `resumes/<YYYYMMDDHHMM>_<company>_<focus>/` — per-run artifacts (gitignored)
 
 ## Dev container (no host installs)
@@ -23,7 +24,7 @@ build, and run the pipeline locally is provided inside the container:
 - Debian 12 base image
 - TeX Live (`latexmk`, `pdflatex`)
 - Node.js 22 LTS, npm 10.9.0
-- Resume orchestrator dependencies (installed automatically via
+- Backend + frontend dependencies (installed automatically via
   `postCreateCommand`)
 
 You can drive the container two ways:
@@ -41,12 +42,13 @@ toolchain command runs inside the container. The only host requirements are
 Docker Engine and Docker Compose v2.
 
 ```bash
-make image-build   # build the dev image (one-time / after Dockerfile changes)
-make install       # npm install in tools/orchestrator
-make build         # bundle the orchestrator
-make typecheck     # tsc --noEmit
-make test          # vitest run
-make sh            # interactive shell in the container
+make image-build    # build the dev image (one-time / after Dockerfile changes)
+make install        # npm install in backend
+make build          # bundle the backend
+make typecheck      # tsc --noEmit
+make test           # vitest run
+make frontend-build # npm install + vite build for the frontend
+make sh             # interactive shell in the container
 ```
 
 Run the pipeline:
@@ -54,6 +56,13 @@ Run the pipeline:
 ```bash
 make run ARGS='run --job path/to/job.md'
 make pdf TEX=resumes/<run>/resume.tex
+```
+
+Or run the web UI (builds the frontend and starts the HTTP server on port 3001):
+
+```bash
+make web
+# then open http://localhost:3001
 ```
 
 `make help` lists every target. The compose file bind-mounts the repo into
@@ -118,12 +127,12 @@ Each run gets its own directory under `resumes/<slug>/` containing:
 The fastest path is the chained `run` command:
 
 ```bash
-cd tools/orchestrator
+cd backend
 npm install
 npm run build
 
-cd ../..
-node tools/orchestrator/dist/cli.js run --job path/to/job.md
+cd ..
+node backend/dist/cli.js run --job path/to/job.md
 ```
 
 That writes `resumes/<YYYYMMDDHHMM>_<company>_<focus>/resume.pdf` (plus all
@@ -132,14 +141,14 @@ audit artifacts).
 To skip the PDF compile (e.g. for fast iteration):
 
 ```bash
-node tools/orchestrator/dist/cli.js run --job path/to/job.md --no-pdf
+node backend/dist/cli.js run --job path/to/job.md --no-pdf
 ```
 
 To force a deterministic-only render that never invokes any LLM, use
 `generate` (an alias for `run` with `RESUME_USE_LLM_DRAFT=false`):
 
 ```bash
-node tools/orchestrator/dist/cli.js generate --job path/to/job.md
+node backend/dist/cli.js generate --job path/to/job.md
 ```
 
 ## Running steps individually
@@ -149,7 +158,7 @@ run directory written by earlier ones.
 
 ```bash
 # Step 1 — analyze (creates a new run dir under resumes/)
-node tools/orchestrator/dist/cli.js analyze \
+node backend/dist/cli.js analyze \
   --job path/to/job.md \
   --outDir resumes
 
@@ -157,16 +166,16 @@ node tools/orchestrator/dist/cli.js analyze \
 RUN=resumes/202605121452_amd_firmware
 
 # Step 2 — retrieve via GraphQL
-node tools/orchestrator/dist/cli.js retrieve --run "$RUN"
+node backend/dist/cli.js retrieve --run "$RUN"
 
 # Step 3 — rank with relevancy + freshness
-node tools/orchestrator/dist/cli.js rank --run "$RUN" --job path/to/job.md
+node backend/dist/cli.js rank --run "$RUN" --job path/to/job.md
 
 # Step 4 — draft resume.tex (and optionally PDF)
-node tools/orchestrator/dist/cli.js draft --run "$RUN" --job path/to/job.md --pdf
+node backend/dist/cli.js draft --run "$RUN" --job path/to/job.md --pdf
 
 # Or, if resume.tex already exists in the run dir:
-node tools/orchestrator/dist/cli.js pdf --run "$RUN"
+node backend/dist/cli.js pdf --run "$RUN"
 ```
 
 ## Environment toggles
@@ -214,10 +223,12 @@ You can also serve the same schema over HTTP for ad-hoc inspection
 (GraphQL Yoga + Prisma-style resolvers are a documented future swap):
 
 ```bash
-cd tools/orchestrator
+cd backend
 RESUME_REPO_ROOT=/workspaces/Resume PORT=4000 npm run graphql:serve
 # then visit http://localhost:4000/graphql
 ```
+
+The same schema is also exposed at `/graphql` on the web server (`make web`).
 
 ## Adding source content
 
@@ -241,7 +252,7 @@ parseable months/years.
 ## Tests + typecheck
 
 ```bash
-cd tools/orchestrator
+cd backend
 npm run typecheck
 npm test
 ```
