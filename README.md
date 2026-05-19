@@ -27,6 +27,7 @@ cp .env.example .env                                # optional LLM/API keys (off
 
 make image-build   # build the dev container image (one-time, ~3–5 min)
 make install       # uv sync in backend/ and npm install in frontend/
+make db-upgrade    # run Alembic migrations against the bundled Postgres
 make web           # build the frontend, then start the server on :3001
 ```
 
