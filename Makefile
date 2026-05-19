@@ -1,59 +1,40 @@
 COMPOSE ?= docker compose
 DEV     := $(COMPOSE) run --rm -T dev
-DEV_TTY := $(COMPOSE) run --rm dev
-ORCH    := tools/orchestrator
+DEV_TTY := $(COMPOSE) run --rm --service-ports dev
 
-ARGS ?=
-TEX  ?=
-PDF  ?=
-
-.PHONY: help image-build install build typecheck test run pdf sh down clean
+.PHONY: help image-build install typecheck test web sh down clean
 
 help:
 	@echo "Resume builder — host-side targets (all run inside the dev container)."
 	@echo ""
 	@echo "Setup:"
-	@echo "  make image-build   Build the dev image from .devcontainer/Dockerfile"
-	@echo "  make install       npm install in $(ORCH)"
+	@echo "  make image-build  Build the dev image from .devcontainer/Dockerfile"
+	@echo "  make install      npm install in backend/ and frontend/"
 	@echo ""
 	@echo "Develop:"
-	@echo "  make build         Bundle the orchestrator (tsup) into $(ORCH)/dist"
-	@echo "  make typecheck     tsc --noEmit on the orchestrator"
-	@echo "  make test          vitest run"
-	@echo ""
-	@echo "Use:"
-	@echo "  make run ARGS='run --job path/to/job.md'"
-	@echo "                     Invoke the orchestrator CLI"
-	@echo "  make pdf TEX=path/to/resume.tex [PDF=path/to/out.pdf]"
-	@echo "                     Compile a .tex to .pdf via scripts/latex_to_pdf"
-	@echo "  make sh            Interactive shell in the dev container"
+	@echo "  make typecheck    tsc --noEmit on backend and frontend"
+	@echo "  make test         vitest run (backend)"
+	@echo "  make web          Build the frontend and serve the web app on :3001"
+	@echo "  make sh           Interactive shell in the dev container"
 	@echo ""
 	@echo "Teardown:"
-	@echo "  make down          Stop+remove any compose containers"
-	@echo "  make clean         down + remove the local image"
+	@echo "  make down         Stop+remove any compose containers"
+	@echo "  make clean        down + remove the local image"
 
 image-build:
 	$(COMPOSE) build dev
 
 install:
-	$(DEV) bash -c 'cd $(ORCH) && npm install'
-
-build:
-	$(DEV) bash -c 'cd $(ORCH) && npm run build'
+	$(DEV) bash -c 'cd backend && npm install && cd ../frontend && npm install'
 
 typecheck:
-	$(DEV) bash -c 'cd $(ORCH) && npm run typecheck'
+	$(DEV) bash -c 'cd backend && npm run typecheck && cd ../frontend && npm run typecheck'
 
 test:
-	$(DEV) bash -c 'cd $(ORCH) && npm test'
+	$(DEV) bash -c 'cd backend && npm test'
 
-run:
-	@if [ -z "$(ARGS)" ]; then echo "Usage: make run ARGS='<cli args>'"; exit 2; fi
-	$(DEV) bash -c 'node $(ORCH)/dist/cli.js $(ARGS)'
-
-pdf:
-	@if [ -z "$(TEX)" ]; then echo "Usage: make pdf TEX=<input.tex> [PDF=<output.pdf>]"; exit 2; fi
-	$(DEV) bash -c './scripts/latex_to_pdf $(TEX) $(PDF)'
+web:
+	$(DEV_TTY) bash -c 'cd frontend && npm run build && cd /home/vscode/workspace/backend && npm run web:serve'
 
 sh:
 	$(DEV_TTY) bash

@@ -4,7 +4,7 @@ import { describe, expect, test } from "vitest";
 import { indexSources } from "../src/sources/indexSources.js";
 import { runRetrieveQuery } from "../src/graph/queries.js";
 
-const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 describe("GraphQL retrieve", () => {
   test("returns experience sources when filtered by kind", async () => {
