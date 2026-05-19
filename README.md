@@ -2,7 +2,7 @@
 
 Generate tailored one-page LaTeX/PDF resumes from structured Markdown sources
 and a job description using a deterministic four-step pipeline (with optional
-LLM steps).
+LLM steps), driven from a small web UI.
 
 ## What's in this repo
 
@@ -12,14 +12,14 @@ LLM steps).
   - `search.prompt.md` — Step 1 prompt (job analysis)
   - `generate.prompt.md` — Step 4 prompt (resume drafting)
 - `scripts/latex_to_pdf` — `.tex` → `.pdf` build helper
-- `backend/` — TypeScript CLI, GraphQL layer, and HTTP API
+- `backend/` — TypeScript HTTP server (REST + SSE + GraphQL) wrapping the pipeline
 - `frontend/` — React + Tailwind web UI (served by the backend in production)
 - `resumes/<YYYYMMDDHHMM>_<company>_<focus>/` — per-run artifacts (gitignored)
 
 ## Dev container (no host installs)
 
-The repo ships with a pinned dev container. Everything you need to develop,
-build, and run the pipeline locally is provided inside the container:
+The repo ships with a pinned dev container. Everything you need to develop
+and run the app locally is provided inside the container:
 
 - Debian 12 base image
 - TeX Live (`latexmk`, `pdflatex`)
@@ -33,7 +33,7 @@ You can drive the container two ways:
 
 Open the repo and pick "Reopen in Container" / "Rebuild Container" after
 pulling changes that touch `.devcontainer/`. The `postCreateCommand` runs
-`npm install && npm run build` for you.
+`npm install` in both `backend/` and `frontend/` for you.
 
 ### From a host terminal (no VS Code)
 
@@ -42,27 +42,12 @@ toolchain command runs inside the container. The only host requirements are
 Docker Engine and Docker Compose v2.
 
 ```bash
-make image-build    # build the dev image (one-time / after Dockerfile changes)
-make install        # npm install in backend
-make build          # bundle the backend
-make typecheck      # tsc --noEmit
-make test           # vitest run
-make frontend-build # npm install + vite build for the frontend
-make sh             # interactive shell in the container
-```
-
-Run the pipeline:
-
-```bash
-make run ARGS='run --job path/to/job.md'
-make pdf TEX=resumes/<run>/resume.tex
-```
-
-Or run the web UI (builds the frontend and starts the HTTP server on port 3001):
-
-```bash
-make web
-# then open http://localhost:3001
+make image-build  # build the dev image (one-time / after Dockerfile changes)
+make install      # npm install in backend/ and frontend/
+make typecheck    # tsc --noEmit on backend and frontend
+make test         # vitest run (backend)
+make web          # build the frontend and serve the web app on :3001
+make sh           # interactive shell in the container
 ```
 
 `make help` lists every target. The compose file bind-mounts the repo into
@@ -81,10 +66,26 @@ Edit `.env` to toggle Perplexity research / LLM drafting (off by default).
 
 Both files are gitignored.
 
+## Quick start
+
+```bash
+make image-build   # once
+make install       # once (or after dependency changes)
+make web           # builds the frontend, then serves on :3001
+```
+
+Open <http://localhost:3001>, paste a job description into the form, and
+click **Generate resume**. The page streams per-step progress (analyze →
+retrieve → rank → draft → pdf) and offers a PDF download + artifact viewer
+when the run finishes. Past runs are listed in the right column and can be
+re-opened anytime.
+
 ## The four-step pipeline
 
+Every web run executes the same deterministic pipeline:
+
 ```
-job.md
+job description (from the form)
   │
   ▼
 Step 1: analyze  ─►  inputs/job_analysis.json
@@ -122,61 +123,19 @@ Each run gets its own directory under `resumes/<slug>/` containing:
 | `resume.pdf`                          | pdf  | Compiled PDF                               |
 | `build.log`                           | pdf  | `latexmk` / `pdflatex` output              |
 
-## Quick start
+## HTTP API
 
-The fastest path is the chained `run` command:
+The backend exposes a small REST surface (used by the frontend) plus the
+GraphQL schema:
 
-```bash
-cd backend
-npm install
-npm run build
-
-cd ..
-node backend/dist/cli.js run --job path/to/job.md
-```
-
-That writes `resumes/<YYYYMMDDHHMM>_<company>_<focus>/resume.pdf` (plus all
-audit artifacts).
-
-To skip the PDF compile (e.g. for fast iteration):
-
-```bash
-node backend/dist/cli.js run --job path/to/job.md --no-pdf
-```
-
-To force a deterministic-only render that never invokes any LLM, use
-`generate` (an alias for `run` with `RESUME_USE_LLM_DRAFT=false`):
-
-```bash
-node backend/dist/cli.js generate --job path/to/job.md
-```
-
-## Running steps individually
-
-You can also drive each step yourself; later steps read artifacts from the
-run directory written by earlier ones.
-
-```bash
-# Step 1 — analyze (creates a new run dir under resumes/)
-node backend/dist/cli.js analyze \
-  --job path/to/job.md \
-  --outDir resumes
-
-# Take the runDir from the previous step's JSON output:
-RUN=resumes/202605121452_amd_firmware
-
-# Step 2 — retrieve via GraphQL
-node backend/dist/cli.js retrieve --run "$RUN"
-
-# Step 3 — rank with relevancy + freshness
-node backend/dist/cli.js rank --run "$RUN" --job path/to/job.md
-
-# Step 4 — draft resume.tex (and optionally PDF)
-node backend/dist/cli.js draft --run "$RUN" --job path/to/job.md --pdf
-
-# Or, if resume.tex already exists in the run dir:
-node backend/dist/cli.js pdf --run "$RUN"
-```
+| Method + path                     | Purpose                                   |
+| --------------------------------- | ----------------------------------------- |
+| `GET  /api/sources`               | All indexed `SourceDoc`s                  |
+| `GET  /api/runs`                  | Past run summaries (newest first)         |
+| `GET  /api/runs/:id/artifacts`    | `job_analysis`, `ranked_sources`, LaTeX   |
+| `GET  /api/runs/:id/pdf`          | Streamed `application/pdf`                |
+| `POST /api/run`                   | SSE stream of pipeline events             |
+| `*    /graphql`                   | Yoga GraphQL endpoint (same schema as Step 2) |
 
 ## Environment toggles
 
@@ -189,15 +148,16 @@ environment variables override file values.
 | `RESUME_USE_LLM_RERANK`             | Step 3 uses deterministic relevancy + freshness only  | _(reserved; rerank pass not yet wired)_                               |
 | `RESUME_USE_LLM_DRAFT`              | Step 4 fills the template deterministically           | Calls `RESUME_DRAFT_PROVIDER` (`openai`, `anthropic`, or `google`)    |
 
-When a toggle is on but the required key is missing the CLI fails fast with
-a clear error.
+When a toggle is on but the required key is missing the run fails fast with
+a clear error event in the SSE stream.
 
 ## Manual Step 1
 
-If `RESUME_USE_PERPLEXITY_RESEARCH=false`, the `analyze` step writes
+If `RESUME_USE_PERPLEXITY_RESEARCH=false`, the analyze step writes
 `inputs/job_analysis.MANUAL.md` with the rendered search prompt. Paste it
 into Perplexity (or any chat UI), save the JSON response over
-`inputs/job_analysis.json`, then run `retrieve` / `rank` / `draft`.
+`inputs/job_analysis.json` in the run directory, then re-run from the web
+UI — the existing analysis will be reused.
 
 ## GraphQL retrieval layer
 
@@ -219,16 +179,9 @@ input SourceFilter {
 }
 ```
 
-You can also serve the same schema over HTTP for ad-hoc inspection
-(GraphQL Yoga + Prisma-style resolvers are a documented future swap):
-
-```bash
-cd backend
-RESUME_REPO_ROOT=/workspaces/Resume PORT=4000 npm run graphql:serve
-# then visit http://localhost:4000/graphql
-```
-
-The same schema is also exposed at `/graphql` on the web server (`make web`).
+The same schema is exposed at `/graphql` while the web server is running,
+so you can poke at it with any GraphQL client (e.g. `curl`, GraphiQL, or
+the Yoga playground at <http://localhost:3001/graphql>).
 
 ## Adding source content
 
@@ -252,9 +205,8 @@ parseable months/years.
 ## Tests + typecheck
 
 ```bash
-cd backend
-npm run typecheck
-npm test
+make typecheck   # backend + frontend
+make test        # backend (vitest)
 ```
 
 ## Troubleshooting
