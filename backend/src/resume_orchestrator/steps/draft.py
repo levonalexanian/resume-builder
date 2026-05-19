@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import json
 import shutil
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
 from jinja2 import Environment
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..clients.llm_draft import (
     DraftProvider,
@@ -93,7 +95,8 @@ async def draft_step(
     repo_root: str | Path,
     run_dir: str | Path,
     job_path: str | Path,
-    config_path: str | Path,
+    session: AsyncSession,
+    user_id: uuid.UUID,
     template_path: str | Path,
     max_experiences: int = 2,
     max_bullets_per_experience: int = 4,
@@ -102,7 +105,6 @@ async def draft_step(
     repo_root_p = Path(repo_root)
     run_dir_p = Path(run_dir)
     job_path_p = Path(job_path)
-    config_path_p = Path(config_path)
     template_path_p = Path(template_path)
 
     ensure_dir(run_dir_p)
@@ -115,11 +117,13 @@ async def draft_step(
     analysis = JobAnalysis.model_validate(json.loads(analysis_path.read_text(encoding="utf-8")))
 
     template_text = template_path_p.read_text(encoding="utf-8")
-    resume_config = load_resume_config(config_path_p)
+    resume_config = await load_resume_config(session, user_id)
     selection = _ranked_to_selected(ranked, max_experiences, max_bullets_per_experience)
 
     shutil.copyfile(template_path_p, inputs_dir / "template.tex")
-    shutil.copyfile(config_path_p, inputs_dir / "resume.config.json")
+    (inputs_dir / "resume.config.json").write_text(
+        json.dumps(resume_config.model_dump(), indent=2) + "\n", encoding="utf-8"
+    )
     shutil.copyfile(job_path_p, inputs_dir / job_path_p.name)
 
     resume_tex_path = run_dir_p / "resume.tex"

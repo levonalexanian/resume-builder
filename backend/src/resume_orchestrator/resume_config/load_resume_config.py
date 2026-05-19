@@ -1,26 +1,29 @@
 from __future__ import annotations
 
-import json
-from pathlib import Path
+import uuid
 
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from ..db.models import User
 from .types import ResumeConfig
 
 
-def load_resume_config(config_path: str | Path) -> ResumeConfig:
-    abs_path = Path(config_path).resolve()
-    try:
-        raw = abs_path.read_text(encoding="utf-8")
-    except OSError as err:
-        hint = (
-            f"Missing resume config at {abs_path}. Create it from resume.config.json.example "
-            f"(repo root): cp resume.config.json.example resume.config.json"
-        )
-        raise RuntimeError(hint) from err
-    return ResumeConfig.model_validate(json.loads(raw))
-
-
-def read_resume_config_text(config_path: str | Path) -> str | None:
-    try:
-        return Path(config_path).read_text(encoding="utf-8")
-    except OSError:
-        return None
+async def load_resume_config(session: AsyncSession, user_id: uuid.UUID) -> ResumeConfig:
+    row = (
+        await session.execute(select(User).where(User.id == user_id))
+    ).scalar_one_or_none()
+    if row is None:
+        raise RuntimeError(f"User not found in database: {user_id}")
+    return ResumeConfig.model_validate(
+        {
+            "name": row.name,
+            "phone": row.phone,
+            "email": row.email or "",
+            "linkedinUrl": row.linkedin_url or "",
+            "linkedinDisplay": row.linkedin_display,
+            "githubUrl": row.github_url or "",
+            "githubDisplay": row.github_display,
+            "skillsLatex": row.skills_latex,
+        }
+    )

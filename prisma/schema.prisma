@@ -1,0 +1,81 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("PRISMA_DATABASE_URL")
+}
+
+model User {
+  id               String   @id @db.Uuid
+  user_id          String   @unique @db.VarChar
+  name             String   @db.VarChar
+  phone            String?  @db.VarChar
+  email            String?  @db.VarChar
+  linkedin_url     String?  @db.VarChar
+  linkedin_display String?  @db.VarChar
+  github_url       String?  @db.VarChar
+  github_display   String?  @db.VarChar
+  skills_latex     String?  @db.VarChar
+  created_at       DateTime @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime @default(now()) @db.Timestamptz(6)
+
+  experiences Experience[]
+  educations  Education[]
+  projects    Project[]
+
+  @@map("users")
+}
+
+model Experience {
+  id           String   @id @db.Uuid
+  user_id      String   @db.Uuid
+  company_slug String   @db.VarChar
+  file_slug    String   @db.VarChar
+  body_md      String   @db.Text
+  position     Int?
+  created_at   DateTime @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime @default(now()) @db.Timestamptz(6)
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([user_id, company_slug, file_slug], map: "uq_experiences_user_company_file")
+  @@index([user_id], map: "ix_experiences_user_id")
+  @@map("experiences")
+}
+
+model Education {
+  id         String   @id @db.Uuid
+  user_id    String   @db.Uuid
+  slug       String   @db.VarChar
+  file_slug  String   @db.VarChar
+  body_md    String   @db.Text
+  position   Int?
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @db.Timestamptz(6)
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([user_id, slug, file_slug], map: "uq_educations_user_slug_file")
+  @@index([user_id], map: "ix_educations_user_id")
+  @@map("educations")
+}
+
+model Project {
+  id         String   @id @db.Uuid
+  user_id    String   @db.Uuid
+  slug       String   @db.VarChar
+  file_slug  String   @db.VarChar
+  body_md    String   @db.Text
+  position   Int?
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @db.Timestamptz(6)
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([user_id, slug, file_slug], map: "uq_projects_user_slug_file")
+  @@index([user_id], map: "ix_projects_user_id")
+  @@map("projects")
+}
+

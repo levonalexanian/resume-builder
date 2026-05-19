@@ -4,10 +4,12 @@ import type { RunRequest } from "../types";
 import { PipelineProgress } from "./PipelineProgress";
 
 export function RunForm({
+  userId,
   state,
   submit,
   openArtifacts
 }: {
+  userId: string | null;
   state: PipelineState;
   submit: (req: RunRequest) => void;
   openArtifacts: (runId: string) => void;
@@ -85,7 +87,7 @@ export function RunForm({
         </div>
       </form>
 
-      {showProgress && <PipelineProgress state={state} onView={openArtifacts} />}
+      {showProgress && <PipelineProgress userId={userId} state={state} onView={openArtifacts} />}
     </main>
   );
 }

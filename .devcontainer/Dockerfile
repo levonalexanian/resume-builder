@@ -19,6 +19,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     curl \
     ca-certificates \
+    postgresql-client \
+    libpq5 \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # --- Node.js (pinned major) --------------------------------------------------

@@ -1,29 +1,30 @@
 from __future__ import annotations
 
-from pathlib import Path
+import uuid
 
 import pytest
+import pytest_asyncio
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from resume_orchestrator.sources.index_sources import index_sources
 from resume_orchestrator.sources.select_sources import filter_candidates
 
 
-@pytest.fixture(scope="module")
-def index(repo_root: Path):
-    return index_sources(repo_root)
+@pytest_asyncio.fixture()
+async def index(db_session: AsyncSession, user_uuid: uuid.UUID):
+    return await index_sources(db_session, user_uuid)
 
 
 class TestFilterCandidates:
-    def test_returns_experience_sources_when_filtered_by_kind(self, index) -> None:
+    @pytest.mark.asyncio
+    async def test_returns_experience_sources_when_filtered_by_kind(self, index) -> None:
         result = filter_candidates(index.docs, kinds=["experience"])
         assert len(result.docs) > 0
         for s in result.docs:
             assert s.kind == "experience"
 
-    def test_matches_by_tag(self, index) -> None:
-        # Find a (kind, tag) that exists in the indexed corpus so the assertion
-        # holds regardless of whether tests run against the example markdown or
-        # the developer's real source files.
+    @pytest.mark.asyncio
+    async def test_matches_by_tag(self, index) -> None:
         target_kind: str | None = None
         target_tag: str | None = None
         for d in index.docs:

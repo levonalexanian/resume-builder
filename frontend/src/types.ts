@@ -1,3 +1,8 @@
+export interface User {
+  user_id: string;
+  name: string;
+}
+
 export type Kind = "experience" | "education" | "project" | "other";
 
 export interface SourceDoc {

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { getRuns } from "../api";
 import type { RunSummary } from "../types";
 
-export function useRuns(): {
+export function useRuns(userId: string | null): {
   runs: RunSummary[];
   loading: boolean;
   error: string | null;
@@ -16,10 +16,15 @@ export function useRuns(): {
   const refresh = useCallback(() => setCounter((n) => n + 1), []);
 
   useEffect(() => {
+    if (!userId) {
+      setRuns([]);
+      setLoading(false);
+      return;
+    }
     let mounted = true;
     setLoading(true);
     setError(null);
-    getRuns()
+    getRuns(userId)
       .then((list) => {
         if (mounted) setRuns(list);
       })
@@ -32,7 +37,7 @@ export function useRuns(): {
     return () => {
       mounted = false;
     };
-  }, [counter]);
+  }, [userId, counter]);
 
   return { runs, loading, error, refresh };
 }

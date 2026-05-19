@@ -18,8 +18,8 @@ function groupBy(docs: SourceDoc[]): Map<Kind, SourceDoc[]> {
   return map;
 }
 
-export function SourcesBrowser(): JSX.Element {
-  const { sources, loading, error } = useSources();
+export function SourcesBrowser({ userId }: { userId: string | null }): JSX.Element {
+  const { sources, loading, error } = useSources(userId);
 
   if (loading) {
     return (

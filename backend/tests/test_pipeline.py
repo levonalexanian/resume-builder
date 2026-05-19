@@ -5,9 +5,11 @@ import os
 import re
 import shutil
 import tempfile
+import uuid
 from pathlib import Path
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from resume_orchestrator.schemas.job_analysis import JobAnalysis
 from resume_orchestrator.steps.analyze import analyze_step
@@ -39,7 +41,9 @@ def run_setup(repo_root: Path):
 
 
 @pytest.mark.asyncio
-async def test_deterministic_pipeline_writes_artifacts(run_setup) -> None:
+async def test_deterministic_pipeline_writes_artifacts(
+    run_setup, db_session: AsyncSession, user_uuid: uuid.UUID
+) -> None:
     repo_root, run_dir, job_path = run_setup
     os.environ["RESUME_USE_PERPLEXITY_RESEARCH"] = "false"
     os.environ["RESUME_USE_LLM_DRAFT"] = "false"
@@ -67,10 +71,14 @@ async def test_deterministic_pipeline_writes_artifacts(run_setup) -> None:
         json.dumps(filled.model_dump(), indent=2) + "\n", encoding="utf-8"
     )
 
-    retrieve = await retrieve_step(repo_root=repo_root, run_dir=run_dir)
+    retrieve = await retrieve_step(
+        session=db_session, user_id=user_uuid, run_dir=run_dir
+    )
     assert retrieve.candidate_count > 0
 
-    rank = await rank_step(repo_root=repo_root, run_dir=run_dir, job_path=job_path)
+    rank = await rank_step(
+        session=db_session, user_id=user_uuid, run_dir=run_dir, job_path=job_path
+    )
     ranked = json.loads(rank.ranked_sources_path.read_text(encoding="utf-8"))
     weight_sum = ranked["weights"]["relevancy"] + ranked["weights"]["freshness"]
     assert weight_sum == pytest.approx(1.0, abs=1e-6)
@@ -81,14 +89,12 @@ async def test_deterministic_pipeline_writes_artifacts(run_setup) -> None:
         assert 0.0 <= first["freshness"] <= 1.0
         assert first["score"] >= 0.0
 
-    config_path = repo_root / "resume.config.json"
-    if not config_path.exists():
-        config_path = repo_root / "resume.config.json.example"
     draft = await draft_step(
         repo_root=repo_root,
         run_dir=run_dir,
         job_path=job_path,
-        config_path=config_path,
+        session=db_session,
+        user_id=user_uuid,
         template_path=repo_root / "templates" / "resume_template.tex",
         max_experiences=2,
         max_bullets_per_experience=4,

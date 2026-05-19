@@ -15,13 +15,15 @@ function formatDate(iso: string): string {
 }
 
 export function RunHistory({
+  userId,
   onSelect,
   refreshSignal
 }: {
+  userId: string | null;
   onSelect: (runId: string) => void;
   refreshSignal: number;
 }): JSX.Element {
-  const { runs, loading, error, refresh } = useRuns();
+  const { runs, loading, error, refresh } = useRuns(userId);
 
   useEffect(() => {
     if (refreshSignal > 0) refresh();

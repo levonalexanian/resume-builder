@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import json
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
+
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..schemas.job_analysis import JobAnalysis
 from ..schemas.retrieval_candidates import (
@@ -22,8 +25,9 @@ class RetrieveStepResult:
     candidate_count: int
 
 
-async def retrieve_step(*, repo_root: str | Path, run_dir: str | Path) -> RetrieveStepResult:
-    repo_root_p = Path(repo_root)
+async def retrieve_step(
+    *, session: AsyncSession, user_id: uuid.UUID, run_dir: str | Path
+) -> RetrieveStepResult:
     run_dir_p = Path(run_dir)
     inputs_dir = ensure_dir(run_dir_p / "inputs")
 
@@ -32,7 +36,7 @@ async def retrieve_step(*, repo_root: str | Path, run_dir: str | Path) -> Retrie
         json.loads(job_analysis_path.read_text(encoding="utf-8"))
     )
 
-    sources_index = index_sources(repo_root_p)
+    sources_index = await index_sources(session, user_id)
 
     groups = analysis.tagsForGraphQL.groups if analysis.tagsForGraphQL.groups else None
     tags = analysis.tagsForGraphQL.stack if analysis.tagsForGraphQL.stack else None
