@@ -28,12 +28,12 @@ export default function App(): JSX.Element {
           <div className="max-w-xl rounded-lg border border-slate-200 bg-white p-6 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
             <h2 className="text-base font-semibold">No users yet.</h2>
             <p className="mt-2">
-              Run{" "}
+              Seed a row in the <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-xs dark:bg-slate-800">users</code>{" "}
+              table to get started (e.g. via{" "}
               <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-xs dark:bg-slate-800">
-                make db-upgrade &amp;&amp; uv run python -m
-                resume_orchestrator.scripts.import_legacy --user-id &lt;you&gt;
-              </code>{" "}
-              in the backend container to seed one.
+                make db-shell
+              </code>
+              ).
             </p>
           </div>
         </div>

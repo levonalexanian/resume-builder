@@ -8,7 +8,6 @@ A small web app for generating tailored one-page LaTeX/PDF resumes from structur
 
 - `backend/` — Python (FastAPI + Pydantic + SQLAlchemy 2.0 async) HTTP server with REST + SSE endpoints. Source content (markdown bodies, user profile/skills) and run metadata live in Postgres; generated artifacts (PDF, .tex, build.log, intermediate JSON) live on the filesystem under `users/<user_id>/resumes/<run_id>/`. Entry point: `backend/src/resume_orchestrator/api.py`.
 - `prisma/` — Prisma schema (`schema.prisma`) and SQL migrations. Source-of-truth for the Postgres schema.
-- `backend/src/resume_orchestrator/scripts/import_legacy.py` — one-shot script for importing on-disk markdown into a user in the DB.
 - `frontend/` — React + Tailwind UI with a user picker. Every API call is scoped to `/api/users/{user_id}/...`.
 - `templates/` — LaTeX template + prompt templates used by the pipeline.
 - `scripts/latex_to_pdf` — `.tex` → `.pdf` build helper invoked by the pipeline.
@@ -31,14 +30,8 @@ make db-upgrade    # run Prisma migrations against the bundled Postgres
 make web           # build the frontend, then start the server on :3001
 ```
 
-The first time, you'll see "No users yet." — seed a user with whatever markdown content you have:
-
-```bash
-# from inside the dev container (make sh), with your sources organized as
-# experience/<company_slug>/<file_slug>.md etc. plus a resume.config.json:
-uv run python -m resume_orchestrator.scripts.import_legacy --user-id <slug>
-```
-
 Open <http://localhost:3001>, pick a user from the dropdown, paste a job description, click **Generate resume**, and download the PDF when the run finishes. Past runs are listed in the right column and can be re-opened anytime.
+
+User onboarding is not yet exposed in the UI — seed users directly in the `users` table for now (`make db-shell`).
 
 `make help` shows the other targets (`typecheck`, `test`, `db-shell`, `db-migrate MSG=...`, `sh`, `down`, `clean`).
