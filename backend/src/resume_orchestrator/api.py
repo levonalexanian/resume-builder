@@ -11,9 +11,13 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Literal
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from .db.engine import create_engine_from_env
+from .db.session import async_session_factory, get_session
 from .schemas.job_analysis import JobAnalysis
 from .sources.index_sources import index_sources
 from .sources.select_sources import infer_company, infer_focus
@@ -36,6 +40,10 @@ _RUN_ID_RE = re.compile(r"^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})")
 def _resolve_repo_root() -> Path:
     env_root = os.environ.get("RESUME_REPO_ROOT")
     return Path(env_root).resolve() if env_root else Path.cwd().resolve()
+
+
+def _resolve_user_root(repo_root: Path, user_id: str) -> Path:
+    return repo_root / "users" / user_id
 
 
 def _frontend_dist_dir(repo_root: Path) -> Path:
@@ -195,9 +203,21 @@ def create_app(repo_root: Path | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.repo_root = root
-        yield
+        engine = create_engine_from_env()
+        app.state.engine = engine
+        app.state.session_factory = async_session_factory(engine)
+        try:
+            yield
+        finally:
+            await engine.dispose()
 
     app = FastAPI(lifespan=lifespan)
+
+    @app.get("/api/healthz")
+    async def healthz(session: AsyncSession = Depends(get_session)) -> JSONResponse:
+        result = await session.execute(text("SELECT 1"))
+        value = result.scalar_one()
+        return JSONResponse({"db": int(value)})
 
     @app.get("/api/sources")
     async def get_sources() -> JSONResponse:
