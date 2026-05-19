@@ -7,7 +7,7 @@ A small web app for generating tailored one-page LaTeX/PDF resumes from structur
 ## Structure
 
 - `backend/` — Python (FastAPI + Pydantic + SQLAlchemy 2.0 async) HTTP server with REST + SSE endpoints. Source content (markdown bodies, user profile/skills) and run metadata live in Postgres; generated artifacts (PDF, .tex, build.log, intermediate JSON) live on the filesystem under `users/<user_id>/resumes/<run_id>/`. Entry point: `backend/src/resume_orchestrator/api.py`.
-- `backend/alembic/` — Alembic migrations (Postgres schema for `users`, `experiences`, `educations`, `projects`, `runs`).
+- `prisma/` — Prisma schema (`schema.prisma`) and SQL migrations. Source-of-truth for the Postgres schema.
 - `backend/src/resume_orchestrator/scripts/import_legacy.py` — one-shot script for importing on-disk markdown into a user in the DB.
 - `frontend/` — React + Tailwind UI with a user picker. Every API call is scoped to `/api/users/{user_id}/...`.
 - `templates/` — LaTeX template + prompt templates used by the pipeline.
@@ -27,7 +27,7 @@ cp .env.example .env                                # optional LLM/API keys (off
 
 make image-build   # build the dev container image (one-time, ~3–5 min)
 make install       # uv sync in backend/ and npm install in frontend/
-make db-upgrade    # run Alembic migrations against the bundled Postgres
+make db-upgrade    # run Prisma migrations against the bundled Postgres
 make web           # build the frontend, then start the server on :3001
 ```
 
@@ -41,4 +41,4 @@ uv run python -m resume_orchestrator.scripts.import_legacy --user-id <slug>
 
 Open <http://localhost:3001>, pick a user from the dropdown, paste a job description, click **Generate resume**, and download the PDF when the run finishes. Past runs are listed in the right column and can be re-opened anytime.
 
-`make help` shows the other targets (`typecheck`, `test`, `db-shell`, `db-revision MSG=...`, `sh`, `down`, `clean`).
+`make help` shows the other targets (`typecheck`, `test`, `db-shell`, `db-migrate MSG=...`, `sh`, `down`, `clean`).
