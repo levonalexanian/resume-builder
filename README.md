@@ -9,10 +9,10 @@ A small web app for generating tailored one-page LaTeX/PDF resumes from structur
 - `experience/`, `education/`, `projects/` — source-of-truth Markdown for the things that can appear on a resume.
 - `templates/` — LaTeX template + prompt templates used by the pipeline.
 - `scripts/latex_to_pdf` — `.tex` → `.pdf` build helper invoked by the pipeline.
-- `backend/` — TypeScript HTTP server (REST + SSE + GraphQL) that wraps the pipeline. Entry point: `backend/src/web/server.ts`.
-- `frontend/` — React + Tailwind UI. Vite proxies `/api` and `/graphql` to the backend in dev; the backend serves the built bundle in production.
+- `backend/` — Python (FastAPI + Pydantic) HTTP server with REST + SSE endpoints that wrap the pipeline. Entry point: `backend/src/resume_orchestrator/api.py`.
+- `frontend/` — React + Tailwind UI. Vite proxies `/api` to the backend in dev; the backend serves the built bundle in production.
 - `resumes/<YYYYMMDDHHMM>_<company>_<focus>/` — one directory per pipeline run, with intermediate artifacts and the final `resume.pdf` (gitignored).
-- `.devcontainer/` + `docker-compose.yml` + `Makefile` — host-side wrappers so the whole toolchain (Node 22, TeX Live, latexmk, …) stays inside a Docker container.
+- `.devcontainer/` + `docker-compose.yml` + `Makefile` — host-side wrappers so the whole toolchain (Python 3.12 + uv, Node 22, TeX Live, latexmk, …) stays inside a Docker container.
 
 ## Run it locally
 
@@ -26,7 +26,7 @@ cp resume.config.json.example resume.config.json   # your contact info + skills
 cp .env.example .env                                # optional LLM/API keys (off by default)
 
 make image-build   # build the dev container image (one-time, ~3–5 min)
-make install       # npm install in backend/ and frontend/
+make install       # uv sync in backend/ and npm install in frontend/
 make web           # build the frontend, then start the server on :3001
 ```
 

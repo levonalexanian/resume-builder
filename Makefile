@@ -9,11 +9,11 @@ help:
 	@echo ""
 	@echo "Setup:"
 	@echo "  make image-build  Build the dev image from .devcontainer/Dockerfile"
-	@echo "  make install      npm install in backend/ and frontend/"
+	@echo "  make install      uv sync in backend/ and npm install in frontend/"
 	@echo ""
 	@echo "Develop:"
-	@echo "  make typecheck    tsc --noEmit on backend and frontend"
-	@echo "  make test         vitest run (backend)"
+	@echo "  make typecheck    tsc --noEmit on the frontend"
+	@echo "  make test         pytest (backend)"
 	@echo "  make web          Build the frontend and serve the web app on :3001"
 	@echo "  make sh           Interactive shell in the dev container"
 	@echo ""
@@ -25,16 +25,16 @@ image-build:
 	$(COMPOSE) build dev
 
 install:
-	$(DEV) bash -c 'cd backend && npm install && cd ../frontend && npm install'
+	$(DEV) bash -c 'cd backend && uv sync --extra dev && cd ../frontend && npm install'
 
 typecheck:
-	$(DEV) bash -c 'cd backend && npm run typecheck && cd ../frontend && npm run typecheck'
+	$(DEV) bash -c 'cd frontend && npm run typecheck'
 
 test:
-	$(DEV) bash -c 'cd backend && npm test'
+	$(DEV) bash -c 'cd backend && uv run pytest'
 
 web:
-	$(DEV_TTY) bash -c 'cd frontend && npm run build && cd /home/vscode/workspace/backend && npm run web:serve'
+	$(DEV_TTY) bash -c 'cd frontend && npm run build && cd /home/vscode/workspace/backend && uv run resume-web'
 
 sh:
 	$(DEV_TTY) bash
