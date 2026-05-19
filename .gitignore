@@ -3,3 +3,6 @@
 
 # Generated pipeline artifacts (per-user, on the filesystem)
 users/*/resumes/
+
+# Prisma CLI dependencies (installed at the repo root)
+/node_modules
