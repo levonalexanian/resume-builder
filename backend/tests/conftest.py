@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import shutil
 import uuid
 from collections.abc import AsyncIterator
 from pathlib import Path
@@ -18,48 +17,14 @@ from sqlalchemy.ext.asyncio import (
 
 from resume_orchestrator.db.models import Education, Experience, Project, User
 
-REAL_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
-
-
-def _has_real_markdown(root: Path) -> bool:
-    for subdir in ("experience", "education", "projects"):
-        for md in (root / subdir).rglob("*.md"):
-            if ".example.md" not in md.name:
-                return True
-    return False
-
-
-def _materialize_examples(src_root: Path, dest_root: Path) -> None:
-    for subdir in ("experience", "education", "projects"):
-        for example in (src_root / subdir).rglob("*.example.md"):
-            rel = example.relative_to(src_root)
-            renamed = rel.with_name(rel.name.replace(".example.md", ".md"))
-            dest = dest_root / renamed
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(example, dest)
+REPO_ROOT = BACKEND_ROOT.parent
 
 
 @pytest.fixture(scope="session")
-def repo_root(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    if _has_real_markdown(REAL_REPO_ROOT):
-        return REAL_REPO_ROOT
-
-    staged = tmp_path_factory.mktemp("resume-repo")
-    for entry in ("templates", "scripts", "resume.config.json.example"):
-        src = REAL_REPO_ROOT / entry
-        if not src.exists():
-            continue
-        dest = staged / entry
-        if src.is_dir():
-            shutil.copytree(src, dest)
-        else:
-            shutil.copyfile(src, dest)
-    config_example = staged / "resume.config.json.example"
-    if config_example.exists():
-        shutil.copyfile(config_example, staged / "resume.config.json")
-    _materialize_examples(REAL_REPO_ROOT, staged)
-    return staged
+def repo_root() -> Path:
+    """Root used to find templates/, scripts/, and the LaTeX toolchain."""
+    return REPO_ROOT
 
 
 def _split_db_url(url: str) -> tuple[str, str]:
@@ -110,7 +75,6 @@ async def db_session(_prepared_database: str) -> AsyncIterator[AsyncSession]:
             yield session
         finally:
             await session.rollback()
-            # truncate user-owned content to keep tests independent
             from sqlalchemy import text
 
             await session.execute(
@@ -120,55 +84,72 @@ async def db_session(_prepared_database: str) -> AsyncIterator[AsyncSession]:
     await engine.dispose()
 
 
+_SAMPLE_EXPERIENCE = {
+    ("acme", "overview"): (
+        "## Acme Robotics\n\n"
+        "- **Position:** Software Engineer\n"
+        "- **Location:** Remote\n"
+        "- **Duration:** January 2024 – Present\n"
+    ),
+    ("acme", "fullstack"): (
+        "## Fullstack Development\n\n"
+        "### What I worked on\n\n"
+        "- Built a TypeScript/React service with GraphQL and SQL backends\n"
+        "- Owned the Prisma data model and helped run AWS deploys\n"
+    ),
+    ("acme", "embedded"): (
+        "## Embedded Systems\n\n"
+        "### What I worked on\n\n"
+        "- STM32 firmware with FreeRTOS over CAN bus\n"
+    ),
+}
+
+_SAMPLE_EDUCATION = {
+    ("undergrad", "overview"): (
+        "## Test University\n\n"
+        "- **Diploma:** B.A.Sc. Computer Engineering\n"
+        "- **Location:** Test City\n"
+        "- **Duration:** September 2020 – April 2024\n"
+        "- **GPA:** 4.0\n"
+    ),
+}
+
+_SAMPLE_PROJECTS: dict[tuple[str, str], str] = {}
+
+
 @pytest_asyncio.fixture()
-async def seeded_user(repo_root: Path, db_session: AsyncSession) -> User:
-    """Seed a test user populated from the repo_root markdown / config."""
-    import json
-
-    config_path = repo_root / "resume.config.json"
-    if not config_path.exists():
-        config_path = repo_root / "resume.config.json.example"
-    cfg = json.loads(config_path.read_text(encoding="utf-8"))
-
+async def seeded_user(db_session: AsyncSession) -> User:
     user = User(
         user_id="testuser",
-        name=cfg.get("name") or "testuser",
-        phone=cfg.get("phone"),
-        email=cfg.get("email"),
-        linkedin_url=cfg.get("linkedinUrl"),
-        linkedin_display=cfg.get("linkedinDisplay"),
-        github_url=cfg.get("githubUrl"),
-        github_display=cfg.get("githubDisplay"),
-        skills_latex=cfg.get("skillsLatex"),
+        name="Test User",
+        phone="(555) 555-5555",
+        email="test@example.com",
+        linkedin_url="https://www.linkedin.com/in/testuser/",
+        linkedin_display="linkedin.com/in/testuser",
+        github_url="https://github.com/testuser",
+        github_display="github.com/testuser",
+        skills_latex="\\textit{[Technical Skills section placeholder]}",
     )
     db_session.add(user)
     await db_session.flush()
 
-    def _seed(folder: str, model: type, slug_field: str) -> None:
-        base = repo_root / folder
-        if not base.is_dir():
-            return
-        for md in sorted(base.rglob("*.md")):
-            if md.name.endswith(".example.md"):
-                continue
-            rel = md.relative_to(base)
-            parts = rel.as_posix().split("/")
-            if len(parts) != 2:
-                continue
-            slug, filename = parts
-            file_slug = filename[:-3]
-            db_session.add(
-                model(
-                    user_id=user.id,
-                    body_md=md.read_text(encoding="utf-8"),
-                    file_slug=file_slug,
-                    **{slug_field: slug},
-                )
+    for (slug, file_slug), body in _SAMPLE_EXPERIENCE.items():
+        db_session.add(
+            Experience(
+                user_id=user.id,
+                company_slug=slug,
+                file_slug=file_slug,
+                body_md=body,
             )
-
-    _seed("experience", Experience, "company_slug")
-    _seed("education", Education, "slug")
-    _seed("projects", Project, "slug")
+        )
+    for (slug, file_slug), body in _SAMPLE_EDUCATION.items():
+        db_session.add(
+            Education(user_id=user.id, slug=slug, file_slug=file_slug, body_md=body)
+        )
+    for (slug, file_slug), body in _SAMPLE_PROJECTS.items():
+        db_session.add(
+            Project(user_id=user.id, slug=slug, file_slug=file_slug, body_md=body)
+        )
     await db_session.commit()
     return user
 

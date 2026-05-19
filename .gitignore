@@ -1,5 +1,5 @@
-# Local/private config (copy from resume.config.json.example)
-resume.config.json
-
 # Secrets and local overrides (copy from .env.example)
 .env
+
+# Generated pipeline artifacts (per-user, on the filesystem)
+users/*/resumes/
