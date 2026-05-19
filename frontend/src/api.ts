@@ -3,7 +3,8 @@ import type {
   RunArtifacts,
   RunRequest,
   RunSummary,
-  SourceDoc
+  SourceDoc,
+  User
 } from "./types";
 
 async function getJson<T>(url: string): Promise<T> {
@@ -12,23 +13,34 @@ async function getJson<T>(url: string): Promise<T> {
   return (await resp.json()) as T;
 }
 
-export function getSources(): Promise<SourceDoc[]> {
-  return getJson<SourceDoc[]>("/api/sources");
+function userBase(userId: string): string {
+  return `/api/users/${encodeURIComponent(userId)}`;
 }
 
-export function getRuns(): Promise<RunSummary[]> {
-  return getJson<RunSummary[]>("/api/runs");
+export function listUsers(): Promise<User[]> {
+  return getJson<User[]>("/api/users");
 }
 
-export function getArtifacts(runId: string): Promise<RunArtifacts> {
-  return getJson<RunArtifacts>(`/api/runs/${encodeURIComponent(runId)}/artifacts`);
+export function getSources(userId: string): Promise<SourceDoc[]> {
+  return getJson<SourceDoc[]>(`${userBase(userId)}/sources`);
 }
 
-export function pdfUrl(runId: string): string {
-  return `/api/runs/${encodeURIComponent(runId)}/pdf`;
+export function getRuns(userId: string): Promise<RunSummary[]> {
+  return getJson<RunSummary[]>(`${userBase(userId)}/runs`);
+}
+
+export function getArtifacts(userId: string, runId: string): Promise<RunArtifacts> {
+  return getJson<RunArtifacts>(
+    `${userBase(userId)}/runs/${encodeURIComponent(runId)}/artifacts`
+  );
+}
+
+export function pdfUrl(userId: string, runId: string): string {
+  return `${userBase(userId)}/runs/${encodeURIComponent(runId)}/pdf`;
 }
 
 export function streamRun(
+  userId: string,
   body: RunRequest,
   onEvent: (e: PipelineEvent) => void,
   onClose?: () => void
@@ -37,7 +49,7 @@ export function streamRun(
 
   void (async () => {
     try {
-      const resp = await fetch("/api/run", {
+      const resp = await fetch(`${userBase(userId)}/runs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),

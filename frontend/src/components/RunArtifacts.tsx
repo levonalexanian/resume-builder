@@ -11,9 +11,11 @@ const TABS: Array<{ key: TabKey; label: string }> = [
 ];
 
 export function RunArtifacts({
+  userId,
   runId,
   onClose
 }: {
+  userId: string;
   runId: string;
   onClose: () => void;
 }): JSX.Element {
@@ -25,7 +27,7 @@ export function RunArtifacts({
     let mounted = true;
     setData(null);
     setError(null);
-    getArtifacts(runId)
+    getArtifacts(userId, runId)
       .then((d) => {
         if (mounted) setData(d);
       })
@@ -35,7 +37,7 @@ export function RunArtifacts({
     return () => {
       mounted = false;
     };
-  }, [runId]);
+  }, [userId, runId]);
 
   function body(): string {
     if (!data) return "";
@@ -91,7 +93,7 @@ export function RunArtifacts({
 
         <div className="mt-4 flex justify-end gap-2 border-t border-slate-200 pt-3 dark:border-slate-700">
           <a
-            href={pdfUrl(runId)}
+            href={pdfUrl(userId, runId)}
             download
             className="inline-flex items-center rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
           >

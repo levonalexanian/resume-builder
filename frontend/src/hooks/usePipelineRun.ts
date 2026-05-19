@@ -27,7 +27,10 @@ const INITIAL_STATE: PipelineState = {
   error: null
 };
 
-export function usePipelineRun(onComplete?: (runId: string) => void): {
+export function usePipelineRun(
+  userId: string | null,
+  onComplete?: (runId: string) => void
+): {
   state: PipelineState;
   submit: (req: RunRequest) => void;
   reset: () => void;
@@ -37,6 +40,10 @@ export function usePipelineRun(onComplete?: (runId: string) => void): {
 
   const submit = useCallback(
     (req: RunRequest) => {
+      if (!userId) {
+        setState((s) => ({ ...s, error: "No user selected." }));
+        return;
+      }
       abortRef.current?.();
       setState({
         running: true,
@@ -45,7 +52,7 @@ export function usePipelineRun(onComplete?: (runId: string) => void): {
         error: null
       });
 
-      const abort = streamRun(req, (event: PipelineEvent) => {
+      const abort = streamRun(userId, req, (event: PipelineEvent) => {
         if (event.type === "step") {
           setState((s) => ({
             ...s,
@@ -60,7 +67,7 @@ export function usePipelineRun(onComplete?: (runId: string) => void): {
       });
       abortRef.current = abort;
     },
-    [onComplete]
+    [userId, onComplete]
   );
 
   const reset = useCallback(() => {
