@@ -36,7 +36,7 @@ typecheck:
 	$(DEV) bash -c 'cd frontend && npm run typecheck'
 
 test:
-	$(DEV) bash -c 'cd backend && uv run pytest'
+	$(DEV) bash -c 'cd backend && uv sync --extra dev && uv run pytest'
 
 web:
 	$(DEV_TTY) bash -c 'cd frontend && npm run build && cd /home/vscode/workspace/backend && uv run resume-web'

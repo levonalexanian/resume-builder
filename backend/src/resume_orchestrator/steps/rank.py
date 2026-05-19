@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import json
+import uuid
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..schemas.job_analysis import JobAnalysis
 from ..schemas.ranked_sources import (
@@ -233,13 +236,13 @@ def _rank_projects(
 
 async def rank_step(
     *,
-    repo_root: str | Path,
+    session: AsyncSession,
+    user_id: uuid.UUID,
     run_dir: str | Path,
     job_path: str | Path,
     weights: RankedWeights | None = None,
     now: datetime | None = None,
 ) -> RankStepResult:
-    repo_root_p = Path(repo_root)
     run_dir_p = Path(run_dir)
     job_path_p = Path(job_path)
 
@@ -254,7 +257,7 @@ async def rank_step(
         json.loads(candidates_path.read_text(encoding="utf-8"))
     )
 
-    index = index_sources(repo_root_p)
+    index = await index_sources(session, user_id)
     candidate_ids = {c.id for c in candidates.candidates}
 
     job_text = job_path_p.read_text(encoding="utf-8")
@@ -270,10 +273,7 @@ async def rank_step(
     education = _rank_education(index, candidate_ids, job_tokens, w, ref_now)
     projects = _rank_projects(index, candidate_ids, job_tokens, w, ref_now)
 
-    try:
-        job_rel = job_path_p.relative_to(repo_root_p).as_posix()
-    except ValueError:
-        job_rel = job_path_p.as_posix()
+    job_rel = job_path_p.as_posix()
 
     ranked = RankedSources(
         schemaVersion=1,

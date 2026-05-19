@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import asyncio
 import json
 import os
 import re
 import shutil
 import tempfile
+import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -13,13 +13,14 @@ from typing import Any, Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .db.engine import create_engine_from_env
+from .db.models import User
 from .db.session import async_session_factory, get_session
 from .schemas.job_analysis import JobAnalysis
-from .sources.index_sources import index_sources
+from .sources.index_sources import get_body_md_by_path, index_sources
 from .sources.select_sources import infer_company, infer_focus
 from .steps.analyze import analyze_step
 from .steps.draft import draft_step
@@ -83,7 +84,12 @@ def _read_optional_text(path: Path) -> str:
         return ""
 
 
-async def _mirror_context(repo_root: Path, ranked_sources_path: Path, context_dir: Path) -> None:
+async def _mirror_context(
+    session: AsyncSession,
+    user_id: uuid.UUID,
+    ranked_sources_path: Path,
+    context_dir: Path,
+) -> None:
     try:
         ranked = json.loads(ranked_sources_path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -95,11 +101,13 @@ async def _mirror_context(repo_root: Path, ranked_sources_path: Path, context_di
                 paths.add(p)
     ensure_dir(context_dir)
     for rel in paths:
-        src = repo_root / rel
+        body = await get_body_md_by_path(session, user_id, rel)
+        if body is None:
+            continue
         dest = context_dir / rel
         try:
             ensure_dir(dest.parent)
-            shutil.copyfile(src, dest)
+            dest.write_text(body, encoding="utf-8")
         except OSError:
             continue
 
@@ -109,13 +117,17 @@ def _sse(event: dict[str, Any]) -> bytes:
 
 
 async def _streaming_pipeline(
+    *,
     repo_root: Path,
+    user_root: Path,
+    session_factory: Any,
+    user_id_uuid: uuid.UUID,
     job_text: str,
     company_hint: str | None,
     focus_hint: str | None,
 ) -> AsyncIterator[bytes]:
     env = load_resume_env(repo_root)
-    out_dir = repo_root / "resumes"
+    out_dir = user_root / "resumes"
     template_path = repo_root / "templates" / "resume_template.tex"
     config_path = repo_root / "resume.config.json"
 
@@ -136,56 +148,64 @@ async def _streaming_pipeline(
         shutil.copyfile(tmp_job_path, run_dir / "inputs" / tmp_job_path.name)
 
         yield _sse({"type": "step", "step": "analyze", "status": "running"})
-        analyze = await analyze_step(
-            repo_root=repo_root, job_path=tmp_job_path, run_dir=run_dir, env=env
-        )
+        async with session_factory() as session:
+            analyze = await analyze_step(
+                repo_root=repo_root, job_path=tmp_job_path, run_dir=run_dir, env=env
+            )
 
-        if not company_hint or not focus_hint:
-            try:
-                analysis = JobAnalysis.model_validate(
-                    json.loads(analyze.job_analysis_path.read_text(encoding="utf-8"))
-                )
-                inferred_company = (
-                    company_hint or analysis.tagsForGraphQL.company or fallback_company
-                )
-                inferred_focus = (
-                    focus_hint or analysis.tagsForGraphQL.roleFamily or fallback_focus
-                )
-                new_base = safe_basename(inferred_company or "run")
-                new_tail = f"_{safe_basename(inferred_focus)}" if inferred_focus else ""
-                new_slug = f"{now_run_id()}_{new_base}{new_tail}"
-                if new_slug != provisional_slug:
-                    new_dir = out_dir / new_slug
-                    ensure_dir(new_dir.parent)
-                    run_dir.rename(new_dir)
-                    run_dir = new_dir
-            except (OSError, ValueError):
-                pass
-        yield _sse({"type": "step", "step": "analyze", "status": "completed"})
+            if not company_hint or not focus_hint:
+                try:
+                    analysis = JobAnalysis.model_validate(
+                        json.loads(analyze.job_analysis_path.read_text(encoding="utf-8"))
+                    )
+                    inferred_company = (
+                        company_hint or analysis.tagsForGraphQL.company or fallback_company
+                    )
+                    inferred_focus = (
+                        focus_hint or analysis.tagsForGraphQL.roleFamily or fallback_focus
+                    )
+                    new_base = safe_basename(inferred_company or "run")
+                    new_tail = f"_{safe_basename(inferred_focus)}" if inferred_focus else ""
+                    new_slug = f"{now_run_id()}_{new_base}{new_tail}"
+                    if new_slug != provisional_slug:
+                        new_dir = out_dir / new_slug
+                        ensure_dir(new_dir.parent)
+                        run_dir.rename(new_dir)
+                        run_dir = new_dir
+                except (OSError, ValueError):
+                    pass
+            yield _sse({"type": "step", "step": "analyze", "status": "completed"})
 
-        yield _sse({"type": "step", "step": "retrieve", "status": "running"})
-        await retrieve_step(repo_root=repo_root, run_dir=run_dir)
-        yield _sse({"type": "step", "step": "retrieve", "status": "completed"})
+            yield _sse({"type": "step", "step": "retrieve", "status": "running"})
+            await retrieve_step(session=session, user_id=user_id_uuid, run_dir=run_dir)
+            yield _sse({"type": "step", "step": "retrieve", "status": "completed"})
 
-        yield _sse({"type": "step", "step": "rank", "status": "running"})
-        rank = await rank_step(repo_root=repo_root, run_dir=run_dir, job_path=tmp_job_path)
-        await _mirror_context(repo_root, rank.ranked_sources_path, run_dir / "context")
-        yield _sse({"type": "step", "step": "rank", "status": "completed"})
+            yield _sse({"type": "step", "step": "rank", "status": "running"})
+            rank = await rank_step(
+                session=session,
+                user_id=user_id_uuid,
+                run_dir=run_dir,
+                job_path=tmp_job_path,
+            )
+            await _mirror_context(
+                session, user_id_uuid, rank.ranked_sources_path, run_dir / "context"
+            )
+            yield _sse({"type": "step", "step": "rank", "status": "completed"})
 
-        yield _sse({"type": "step", "step": "draft", "status": "running"})
-        await draft_step(
-            repo_root=repo_root,
-            run_dir=run_dir,
-            job_path=tmp_job_path,
-            config_path=config_path,
-            template_path=template_path,
-            env=env,
-        )
-        yield _sse({"type": "step", "step": "draft", "status": "completed"})
+            yield _sse({"type": "step", "step": "draft", "status": "running"})
+            await draft_step(
+                repo_root=repo_root,
+                run_dir=run_dir,
+                job_path=tmp_job_path,
+                config_path=config_path,
+                template_path=template_path,
+                env=env,
+            )
+            yield _sse({"type": "step", "step": "draft", "status": "completed"})
 
-        yield _sse({"type": "step", "step": "pdf", "status": "running"})
-        await pdf_step(repo_root=repo_root, run_dir=run_dir)
-        yield _sse({"type": "step", "step": "pdf", "status": "completed"})
+            yield _sse({"type": "step", "step": "pdf", "status": "running"})
+            await pdf_step(repo_root=repo_root, run_dir=run_dir)
+            yield _sse({"type": "step", "step": "pdf", "status": "completed"})
 
         yield _sse({"type": "done", "runId": run_dir.name})
     except Exception as err:  # surface to client and end stream
@@ -219,14 +239,25 @@ def create_app(repo_root: Path | None = None) -> FastAPI:
         value = result.scalar_one()
         return JSONResponse({"db": int(value)})
 
+    _DEFAULT_USER_SLUG = "levon"
+
+    async def _resolve_user_uuid(session: AsyncSession, slug: str) -> uuid.UUID:
+        row = (
+            await session.execute(select(User).where(User.user_id == slug))
+        ).scalar_one_or_none()
+        if row is None:
+            raise HTTPException(status_code=404, detail=f"User not found: {slug}")
+        return row.id
+
     @app.get("/api/sources")
-    async def get_sources() -> JSONResponse:
-        index = index_sources(root)
+    async def get_sources(session: AsyncSession = Depends(get_session)) -> JSONResponse:
+        user_uuid = await _resolve_user_uuid(session, _DEFAULT_USER_SLUG)
+        index = await index_sources(session, user_uuid)
         return JSONResponse([doc.model_dump() for doc in index.docs])
 
     @app.get("/api/runs")
     async def get_runs() -> JSONResponse:
-        runs_dir = root / "resumes"
+        runs_dir = _resolve_user_root(root, _DEFAULT_USER_SLUG) / "resumes"
         if not runs_dir.exists():
             return JSONResponse([])
         summaries = [
@@ -243,7 +274,7 @@ def create_app(repo_root: Path | None = None) -> FastAPI:
 
     @app.get("/api/runs/{run_id}/artifacts")
     async def get_artifacts(run_id: str) -> JSONResponse:
-        run_dir = root / "resumes" / run_id
+        run_dir = _resolve_user_root(root, _DEFAULT_USER_SLUG) / "resumes" / run_id
         if not run_dir.exists():
             raise HTTPException(status_code=404, detail=f"Run not found: {run_id}")
         return JSONResponse(
@@ -260,7 +291,9 @@ def create_app(repo_root: Path | None = None) -> FastAPI:
 
     @app.get("/api/runs/{run_id}/pdf")
     async def get_pdf(run_id: str) -> FileResponse:
-        pdf_path = root / "resumes" / run_id / "resume.pdf"
+        pdf_path = (
+            _resolve_user_root(root, _DEFAULT_USER_SLUG) / "resumes" / run_id / "resume.pdf"
+        )
         if not pdf_path.exists():
             raise HTTPException(status_code=404, detail=f"PDF not found for run: {run_id}")
         return FileResponse(
@@ -271,7 +304,9 @@ def create_app(repo_root: Path | None = None) -> FastAPI:
         )
 
     @app.post("/api/run")
-    async def post_run(request: Request) -> Response:
+    async def post_run(
+        request: Request, session: AsyncSession = Depends(get_session)
+    ) -> Response:
         try:
             body = await request.json()
         except (ValueError, json.JSONDecodeError):
@@ -284,8 +319,19 @@ def create_app(repo_root: Path | None = None) -> FastAPI:
         company_hint = raw_company if isinstance(raw_company, str) and raw_company else None
         focus_hint = raw_focus if isinstance(raw_focus, str) and raw_focus else None
 
+        user_uuid = await _resolve_user_uuid(session, _DEFAULT_USER_SLUG)
+        user_root = _resolve_user_root(root, _DEFAULT_USER_SLUG)
+
         return StreamingResponse(
-            _streaming_pipeline(root, job_description, company_hint, focus_hint),
+            _streaming_pipeline(
+                repo_root=root,
+                user_root=user_root,
+                session_factory=app.state.session_factory,
+                user_id_uuid=user_uuid,
+                job_text=job_description,
+                company_hint=company_hint,
+                focus_hint=focus_hint,
+            ),
             media_type="text/event-stream",
             headers={
                 "Cache-Control": "no-cache, no-transform",

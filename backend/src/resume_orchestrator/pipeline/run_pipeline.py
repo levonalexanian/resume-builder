@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import json
-import shutil
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from ..schemas.job_analysis import JobAnalysis
+from ..sources.index_sources import get_body_md_by_path
 from ..sources.select_sources import infer_company, infer_focus
 from ..steps.analyze import analyze_step
 from ..steps.draft import draft_step
@@ -30,7 +33,12 @@ class RunPipelineResult:
     build_log_path: Path | None = None
 
 
-async def _mirror_context(repo_root: Path, ranked_sources_path: Path, context_dir: Path) -> None:
+async def _mirror_context(
+    session: AsyncSession,
+    user_id: uuid.UUID,
+    ranked_sources_path: Path,
+    context_dir: Path,
+) -> None:
     raw = ranked_sources_path.read_text(encoding="utf-8")
     ranked = json.loads(raw)
     paths: set[str] = set()
@@ -40,11 +48,13 @@ async def _mirror_context(repo_root: Path, ranked_sources_path: Path, context_di
                 paths.add(p)
     ensure_dir(context_dir)
     for rel in paths:
-        src = repo_root / rel
+        body = await get_body_md_by_path(session, user_id, rel)
+        if body is None:
+            continue
         dest = context_dir / rel
         try:
             ensure_dir(dest.parent)
-            shutil.copyfile(src, dest)
+            dest.write_text(body, encoding="utf-8")
         except OSError:
             continue
 
@@ -52,6 +62,8 @@ async def _mirror_context(repo_root: Path, ranked_sources_path: Path, context_di
 async def run_pipeline(
     *,
     repo_root: str | Path,
+    session: AsyncSession,
+    user_id: uuid.UUID,
     job_path: str | Path,
     out_dir: str | Path,
     config_path: str | Path,
@@ -97,9 +109,11 @@ async def run_pipeline(
         except (OSError, ValueError):
             pass
 
-    await retrieve_step(repo_root=repo_root_p, run_dir=run_dir)
-    rank = await rank_step(repo_root=repo_root_p, run_dir=run_dir, job_path=job_path_p)
-    await _mirror_context(repo_root_p, rank.ranked_sources_path, run_dir / "context")
+    await retrieve_step(session=session, user_id=user_id, run_dir=run_dir)
+    rank = await rank_step(
+        session=session, user_id=user_id, run_dir=run_dir, job_path=job_path_p
+    )
+    await _mirror_context(session, user_id, rank.ranked_sources_path, run_dir / "context")
 
     draft = await draft_step(
         repo_root=repo_root_p,
