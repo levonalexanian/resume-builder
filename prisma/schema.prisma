@@ -39,7 +39,7 @@ model Experience {
   created_at   DateTime @default(now()) @db.Timestamptz(6)
   updated_at   DateTime @default(now()) @db.Timestamptz(6)
 
-  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@unique([user_id, company_slug, file_slug], map: "uq_experiences_user_company_file")
   @@index([user_id], map: "ix_experiences_user_id")
@@ -56,7 +56,7 @@ model Education {
   created_at DateTime @default(now()) @db.Timestamptz(6)
   updated_at DateTime @default(now()) @db.Timestamptz(6)
 
-  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@unique([user_id, slug, file_slug], map: "uq_educations_user_slug_file")
   @@index([user_id], map: "ix_educations_user_id")
@@ -73,7 +73,7 @@ model Project {
   created_at DateTime @default(now()) @db.Timestamptz(6)
   updated_at DateTime @default(now()) @db.Timestamptz(6)
 
-  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@unique([user_id, slug, file_slug], map: "uq_projects_user_slug_file")
   @@index([user_id], map: "ix_projects_user_id")
@@ -92,7 +92,7 @@ model Run {
   created_at      DateTime  @default(now()) @db.Timestamptz(6)
   completed_at    DateTime? @db.Timestamptz(6)
 
-  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@unique([user_id, run_id_str], map: "uq_runs_user_runid")
   @@index([user_id], map: "ix_runs_user_id")
