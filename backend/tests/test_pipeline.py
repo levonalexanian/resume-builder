@@ -89,14 +89,12 @@ async def test_deterministic_pipeline_writes_artifacts(
         assert 0.0 <= first["freshness"] <= 1.0
         assert first["score"] >= 0.0
 
-    config_path = repo_root / "resume.config.json"
-    if not config_path.exists():
-        config_path = repo_root / "resume.config.json.example"
     draft = await draft_step(
         repo_root=repo_root,
         run_dir=run_dir,
         job_path=job_path,
-        config_path=config_path,
+        session=db_session,
+        user_id=user_uuid,
         template_path=repo_root / "templates" / "resume_template.tex",
         max_experiences=2,
         max_bullets_per_experience=4,

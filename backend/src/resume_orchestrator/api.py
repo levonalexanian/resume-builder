@@ -129,7 +129,6 @@ async def _streaming_pipeline(
     env = load_resume_env(repo_root)
     out_dir = user_root / "resumes"
     template_path = repo_root / "templates" / "resume_template.tex"
-    config_path = repo_root / "resume.config.json"
 
     fd, tmp_str = tempfile.mkstemp(prefix="resume-job-", suffix=".md", dir="/tmp")
     os.close(fd)
@@ -197,7 +196,8 @@ async def _streaming_pipeline(
                 repo_root=repo_root,
                 run_dir=run_dir,
                 job_path=tmp_job_path,
-                config_path=config_path,
+                session=session,
+                user_id=user_id_uuid,
                 template_path=template_path,
                 env=env,
             )
