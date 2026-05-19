@@ -1,6 +1,6 @@
 COMPOSE ?= docker compose
 DEV     := $(COMPOSE) run --rm -T dev
-DEV_TTY := $(COMPOSE) run --rm dev
+DEV_TTY := $(COMPOSE) run --rm --service-ports dev
 
 .PHONY: help image-build install typecheck test web sh down clean
 
