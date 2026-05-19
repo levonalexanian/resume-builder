@@ -3,4 +3,3 @@ resume.config.json
 
 # Secrets and local overrides (copy from .env.example)
 .env
-.env.local
