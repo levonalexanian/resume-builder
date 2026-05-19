@@ -81,7 +81,7 @@ async def db_session(_prepared_database: str) -> AsyncIterator[AsyncSession]:
             from sqlalchemy import text
 
             await session.execute(
-                text("TRUNCATE users, experiences, educations, projects, runs CASCADE")
+                text("TRUNCATE users, experiences, educations, projects CASCADE")
             )
             await session.commit()
     await engine.dispose()

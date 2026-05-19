@@ -58,22 +58,6 @@ CREATE TABLE "projects" (
     CONSTRAINT "projects_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
-CREATE TABLE "runs" (
-    "id" UUID NOT NULL,
-    "user_id" UUID NOT NULL,
-    "run_id_str" VARCHAR NOT NULL,
-    "company" VARCHAR,
-    "focus" VARCHAR,
-    "status" VARCHAR NOT NULL,
-    "job_description" TEXT,
-    "error_message" TEXT,
-    "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "completed_at" TIMESTAMPTZ(6),
-
-    CONSTRAINT "runs_pkey" PRIMARY KEY ("id")
-);
-
 -- CreateIndex
 CREATE UNIQUE INDEX "users_user_id_key" ON "users"("user_id");
 
@@ -95,12 +79,6 @@ CREATE INDEX "ix_projects_user_id" ON "projects"("user_id");
 -- CreateIndex
 CREATE UNIQUE INDEX "uq_projects_user_slug_file" ON "projects"("user_id", "slug", "file_slug");
 
--- CreateIndex
-CREATE INDEX "ix_runs_user_id" ON "runs"("user_id");
-
--- CreateIndex
-CREATE UNIQUE INDEX "uq_runs_user_runid" ON "runs"("user_id", "run_id_str");
-
 -- AddForeignKey
 ALTER TABLE "experiences" ADD CONSTRAINT "experiences_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE NO ACTION;
 
@@ -109,7 +87,4 @@ ALTER TABLE "educations" ADD CONSTRAINT "educations_user_id_fkey" FOREIGN KEY ("
 
 -- AddForeignKey
 ALTER TABLE "projects" ADD CONSTRAINT "projects_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE NO ACTION;
-
--- AddForeignKey
-ALTER TABLE "runs" ADD CONSTRAINT "runs_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE NO ACTION;
 
