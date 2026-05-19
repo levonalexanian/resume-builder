@@ -9,7 +9,7 @@ import { rankStep } from "../src/steps/rank.js";
 import { draftStep } from "../src/steps/draft.js";
 import { JobAnalysisSchema } from "../src/schemas/jobAnalysis.js";
 
-const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 let runDir: string;
 let jobPath: string;
