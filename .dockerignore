@@ -8,7 +8,6 @@
 resume.config.json
 resumes/
 backend/node_modules
-backend/dist
 frontend/node_modules
 frontend/dist
 node_modules
