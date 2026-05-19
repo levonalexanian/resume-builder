@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import os
+import subprocess
 import uuid
 from collections.abc import AsyncIterator
 from pathlib import Path
 
 import pytest
 import pytest_asyncio
-from alembic import command
-from alembic.config import Config
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
@@ -57,9 +56,13 @@ async def _prepared_database(database_url: str) -> AsyncIterator[str]:
     prev = os.environ.get("DATABASE_URL")
     os.environ["DATABASE_URL"] = database_url
     try:
-        cfg = Config(str(BACKEND_ROOT / "alembic.ini"))
-        cfg.set_main_option("script_location", str(BACKEND_ROOT / "alembic"))
-        command.upgrade(cfg, "head")
+        prisma_url = database_url.replace("postgresql+asyncpg://", "postgresql://")
+        subprocess.run(
+            ["npx", "prisma", "migrate", "deploy"],
+            cwd=REPO_ROOT,
+            env={**os.environ, "PRISMA_DATABASE_URL": prisma_url},
+            check=True,
+        )
         yield database_url
     finally:
         if prev is not None:
