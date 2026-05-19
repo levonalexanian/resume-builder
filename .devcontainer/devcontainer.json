@@ -9,6 +9,6 @@
     "yzhang.markdown-all-in-one",
     "GitHub.copilot"
   ],
-  "postCreateCommand": "cd backend && npm install && cd ../frontend && npm install",
+  "postCreateCommand": "cd backend && uv sync --extra dev && cd ../frontend && npm install",
   "remoteUser": "vscode"
 }
